@@ -747,6 +747,15 @@ empty = 1
 again.
 
 ---
+# Waveform
+<img width="1569" height="572" alt="image" src="https://github.com/user-attachments/assets/eb4ffffc-de76-4331-be9a-6392580a0536" />
+<img width="1569" height="515" alt="image" src="https://github.com/user-attachments/assets/cce00091-3efb-4885-934c-7fd6163111e0" />
+<img width="1576" height="684" alt="image" src="https://github.com/user-attachments/assets/8c02ca7c-0113-4edf-8dc7-32a32f0e7ddb" />
+<img width="1568" height="462" alt="image" src="https://github.com/user-attachments/assets/9a3216ef-67b7-4ad1-8c17-a10a06fce0d6" />
+
+
+
+
 
 # File Structure
 
