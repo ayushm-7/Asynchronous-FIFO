@@ -1,0 +1,471 @@
+`timescale 1ns / 1ps
+
+module fifo2_tb;
+
+    parameter DATA_WIDTH = 8;
+    parameter DEPTH      = 8;
+
+    // ------------------------------------------------
+    // DUT inputs
+    // ------------------------------------------------
+    reg wclk;
+    reg rclk;
+    reg wrst_n;
+    reg rrst_n;
+
+    reg w_en;
+    reg r_en;
+
+    reg [DATA_WIDTH-1:0] data_in;
+
+    // ------------------------------------------------
+    // DUT outputs
+    // ------------------------------------------------
+    wire [DATA_WIDTH-1:0] data_out;
+    wire full;
+    wire empty;
+
+    // ------------------------------------------------
+    // DUT
+    // ------------------------------------------------
+    top #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .DEPTH(DEPTH)
+    ) uut (
+        .wclk     (wclk),
+        .rclk     (rclk),
+        .wrst_n   (wrst_n),
+        .rrst_n   (rrst_n),
+        .w_en     (w_en),
+        .r_en     (r_en),
+        .data_in  (data_in),
+        .data_out (data_out),
+        .full     (full),
+        .empty    (empty)
+    );
+
+    // ------------------------------------------------
+    // WRITE CLOCK = 100 MHz
+    // ------------------------------------------------
+    always begin
+        wclk = 1'b0;
+        #5;
+        wclk = 1'b1;
+        #5;
+    end
+
+    // ------------------------------------------------
+    // READ CLOCK = ~65 MHz
+    // ------------------------------------------------
+    always begin
+        rclk = 1'b0;
+        #7.69;
+        rclk = 1'b1;
+        #7.69;
+    end
+
+    // ------------------------------------------------
+    // SCOREBOARD
+    // ------------------------------------------------
+    reg [DATA_WIDTH-1:0] expected [0:100];
+
+    integer write_count;
+    integer read_count;
+    integer errors;
+    integer i;
+
+    // ------------------------------------------------
+    // TEST
+    // ------------------------------------------------
+    initial begin
+
+        // Initial values
+        wrst_n = 1'b0;
+        rrst_n = 1'b0;
+
+        w_en = 1'b0;
+        r_en = 1'b0;
+
+        data_in = 8'd0;
+
+        write_count = 0;
+        read_count  = 0;
+        errors      = 0;
+
+        // ============================================
+        // RESET
+        // ============================================
+
+        #50;
+
+        wrst_n = 1'b1;
+        rrst_n = 1'b1;
+
+        #50;
+
+        $display("");
+        $display("==========================================");
+        $display("RESET COMPLETE");
+        $display("==========================================");
+
+
+        // ============================================
+        // TEST 1 : WRITE 8 VALUES
+        // ============================================
+
+        $display("");
+        $display("==========================================");
+        $display("TEST 1 : WRITE 8 VALUES");
+        $display("==========================================");
+
+        for (i = 0; i < DEPTH; i = i + 1) begin
+
+            @(negedge wclk);
+
+            if (!full) begin
+
+                data_in = i + 1;
+                w_en = 1'b1;
+
+                expected[write_count] = i + 1;
+                write_count = write_count + 1;
+
+                $display("WRITE : %0d", i + 1);
+
+            end
+            else begin
+
+                $display("FAIL : FIFO became FULL too early");
+                errors = errors + 1;
+
+            end
+        end
+
+        @(negedge wclk);
+        w_en = 1'b0;
+
+        #50;
+
+        if (full) begin
+            $display("PASS : FIFO FULL after 8 writes");
+        end
+        else begin
+            $display("FAIL : FIFO did not become FULL");
+            errors = errors + 1;
+        end
+
+
+        // ============================================
+        // TEST 2 : WRITE WHILE FULL
+        // ============================================
+
+        $display("");
+        $display("==========================================");
+        $display("TEST 2 : WRITE WHILE FULL");
+        $display("==========================================");
+
+        @(negedge wclk);
+
+        data_in = 8'hFF;
+        w_en = 1'b1;
+
+        @(negedge wclk);
+
+        w_en = 1'b0;
+
+        if (write_count == DEPTH) begin
+            $display("PASS : Write blocked while FIFO FULL");
+        end
+        else begin
+            $display("FAIL : Write count changed while FULL");
+            errors = errors + 1;
+        end
+
+
+        // ============================================
+        // TEST 3 : READ 8 VALUES
+        // ============================================
+
+        #100;
+
+        $display("");
+        $display("==========================================");
+        $display("TEST 3 : READ 8 VALUES");
+        $display("==========================================");
+
+        for (i = 0; i < DEPTH; i = i + 1) begin
+
+            @(negedge rclk);
+
+            if (!empty) begin
+
+                // Asynchronous memory read
+                #1;
+
+                if (data_out == expected[read_count]) begin
+
+                    $display("PASS : Expected = %0d, Got = %0d",
+                             expected[read_count],
+                             data_out);
+
+                end
+                else begin
+
+                    $display("FAIL : Expected = %0d, Got = %0d",
+                             expected[read_count],
+                             data_out);
+
+                    errors = errors + 1;
+                end
+
+                read_count = read_count + 1;
+
+                r_en = 1'b1;
+
+            end
+            else begin
+
+                $display("FAIL : FIFO became EMPTY too early");
+                errors = errors + 1;
+
+                r_en = 1'b0;
+
+            end
+        end
+
+        @(negedge rclk);
+        r_en = 1'b0;
+
+        #50;
+
+        if (empty) begin
+            $display("PASS : FIFO EMPTY after 8 reads");
+        end
+        else begin
+            $display("FAIL : FIFO did not become EMPTY");
+            errors = errors + 1;
+        end
+
+
+        // ============================================
+        // TEST 4 : READ WHILE EMPTY
+        // ============================================
+
+        $display("");
+        $display("==========================================");
+        $display("TEST 4 : READ WHILE EMPTY");
+        $display("==========================================");
+
+        @(negedge rclk);
+
+        r_en = 1'b1;
+
+        @(negedge rclk);
+
+        r_en = 1'b0;
+
+        if (empty) begin
+            $display("PASS : Read blocked while FIFO EMPTY");
+        end
+        else begin
+            $display("FAIL : EMPTY flag incorrect");
+            errors = errors + 1;
+        end
+
+
+        // ============================================
+        // RESET BEFORE SIMULTANEOUS TEST
+        // ============================================
+
+        #100;
+
+        wrst_n = 1'b0;
+        rrst_n = 1'b0;
+
+        #30;
+
+        wrst_n = 1'b1;
+        rrst_n = 1'b1;
+
+        #50;
+
+
+        // ============================================
+        // TEST 5 : SIMULTANEOUS WRITE + READ
+        // ============================================
+
+        $display("");
+        $display("==========================================");
+        $display("TEST 5 : SIMULTANEOUS WRITE + READ");
+        $display("==========================================");
+
+        // Start by writing 4 values.
+        // This guarantees that the read side has
+        // valid data when simultaneous operation starts.
+
+        for (i = 0; i < 4; i = i + 1) begin
+
+            @(negedge wclk);
+
+            if (!full) begin
+
+                data_in = i + 100;
+                w_en = 1'b1;
+
+                expected[write_count] = i + 100;
+                write_count = write_count + 1;
+
+                $display("INITIAL WRITE : %0d",
+                         i + 100);
+
+            end
+
+        end
+
+        @(negedge wclk);
+        w_en = 1'b0;
+
+        #100;
+
+
+        // --------------------------------------------
+        // Simultaneous operation
+        // --------------------------------------------
+
+        fork
+
+            // ----------------------------------------
+            // WRITE PROCESS
+            // ----------------------------------------
+
+            begin
+
+                for (i = 0; i < 20; i = i + 1) begin
+
+                    @(negedge wclk);
+
+                    if (!full) begin
+
+                        data_in = i + 200;
+                        w_en = 1'b1;
+
+                        expected[write_count] = i + 200;
+                        write_count = write_count + 1;
+
+                        $display("WRITE : %0d",
+                                 i + 200);
+
+                    end
+                    else begin
+
+                        w_en = 1'b0;
+
+                    end
+
+                end
+
+                @(negedge wclk);
+                w_en = 1'b0;
+
+            end
+
+
+            // ----------------------------------------
+            // READ PROCESS
+            // ----------------------------------------
+
+            begin
+
+                for (i = 0; i < 20; i = i + 1) begin
+
+                    @(negedge rclk);
+
+                    if (!empty) begin
+
+                        #1;
+
+                        if (data_out ==
+                            expected[read_count]) begin
+
+                            $display(
+                                "PASS READ : Expected = %0d, Got = %0d",
+                                expected[read_count],
+                                data_out
+                            );
+
+                        end
+                        else begin
+
+                            $display(
+                                "FAIL READ : Expected = %0d, Got = %0d",
+                                expected[read_count],
+                                data_out
+                            );
+
+                            errors = errors + 1;
+
+                        end
+
+                        read_count = read_count + 1;
+
+                        r_en = 1'b1;
+
+                    end
+                    else begin
+
+                        r_en = 1'b0;
+
+                    end
+
+                end
+
+                @(negedge rclk);
+                r_en = 1'b0;
+
+            end
+
+        join
+
+
+        // ============================================
+        // FINAL RESULT
+        // ============================================
+
+        #500;
+
+        $display("");
+        $display("");
+        $display("==========================================");
+        $display("              FINAL RESULT");
+        $display("==========================================");
+
+        $display("TOTAL WRITES = %0d", write_count);
+        $display("TOTAL READS  = %0d", read_count);
+        $display("TOTAL ERRORS = %0d", errors);
+
+        if (errors == 0) begin
+
+            $display("");
+            $display("**************************************");
+            $display("          ALL TESTS PASSED");
+            $display("**************************************");
+
+        end
+        else begin
+
+            $display("");
+            $display("**************************************");
+            $display("             TEST FAILED");
+            $display("**************************************");
+
+        end
+
+        $display("==========================================");
+
+        #100;
+
+        $stop;
+
+    end
+
+endmodule
