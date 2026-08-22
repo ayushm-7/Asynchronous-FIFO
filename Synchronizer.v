@@ -1,0 +1,23 @@
+module synchronizer #(
+    parameter PTR_WIDTH = 3
+)(
+    input  wire             clk,
+    input  wire             rst_n,
+    input  wire [PTR_WIDTH:0] d_in,
+    output reg  [PTR_WIDTH:0] d_out
+);
+
+    reg [PTR_WIDTH:0] q1;
+
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            q1    <= 0;
+            d_out <= 0;
+        end
+        else begin
+            q1    <= d_in;
+            d_out <= q1;
+        end
+    end
+
+endmodule
